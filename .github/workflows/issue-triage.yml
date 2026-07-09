@@ -19,7 +19,7 @@ env:
 jobs:
   initialize-context:
     if: github.repository == 'astral-sh/uv'
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-4' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     environment:
       name: automations
       deployment: false
@@ -108,7 +108,7 @@ jobs:
   triage:
     needs: initialize-context
     if: github.repository == 'astral-sh/uv'
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-4' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     environment:
       name: automations
       deployment: false
@@ -182,7 +182,7 @@ jobs:
   context:
     needs: triage
     if: needs.triage.outputs.result != ''
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-4' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     environment:
       name: automations
       deployment: false
@@ -262,11 +262,11 @@ jobs:
       contents: read
       id-token: write
       issues: read
-    uses: $/.github/workflows/reproduce-bug.yml
+    uses: ./.github/workflows/reproduce-bug.yml
     with:
       issue: ${{ inputs.issue || github.event.issue.number }}
       issue-type: ${{ fromJSON(needs.triage.outputs.result).type }}
-      runner: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-4' || 'ubuntu-latest' }}
+      runner: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     secrets: inherit
 
   fix-bug:
@@ -284,7 +284,7 @@ jobs:
       contents: read
       id-token: write
       issues: read
-    uses: $/.github/workflows/fix-bug.yml
+    uses: ./.github/workflows/fix-bug.yml
     with:
       issue: ${{ inputs.issue || github.event.issue.number }}
       issue-number: ${{ needs.reproduce-bug.outputs.issue-number }}
@@ -293,5 +293,5 @@ jobs:
       parent-pull-request: ${{ needs.reproduce-bug.outputs.pull-request }}
       parent-head-ref: ${{ needs.reproduce-bug.outputs.head-ref }}
       parent-head-sha: ${{ needs.reproduce-bug.outputs.head-sha }}
-      runner: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-4' || 'ubuntu-latest' }}
+      runner: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     secrets: inherit

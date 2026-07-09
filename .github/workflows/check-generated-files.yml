@@ -22,7 +22,7 @@ env:
 jobs:
   cargo-dev-generate-all:
     timeout-minutes: 10
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-4' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     name: "cargo dev generate-all"
     env:
       RUSTC_BOOTSTRAP: "1"

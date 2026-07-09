@@ -21,7 +21,7 @@ jobs:
   build-binary-linux-libc:
     name: "linux libc"
     timeout-minutes: 10
-    runs-on: github-ubuntu-24.04-x86_64-8
+    runs-on: ubuntu-latest
     env:
       RUSTC_BOOTSTRAP: 1
     steps:
@@ -53,7 +53,7 @@ jobs:
   build-binary-linux-aarch64:
     name: "linux aarch64"
     timeout-minutes: 10
-    runs-on: github-ubuntu-24.04-aarch64-4
+    runs-on: ubuntu-24.04-arm
     env:
       RUSTC_BOOTSTRAP: 1
       # Use `rustc`'s bundled `lld` instead of the system linker.
@@ -87,7 +87,7 @@ jobs:
   build-binary-linux-armv7-gnueabihf:
     name: "linux armv7 gnueabihf"
     timeout-minutes: 15
-    runs-on: github-ubuntu-24.04-x86_64-8
+    runs-on: ubuntu-latest
     env:
       RUSTC_BOOTSTRAP: 1
     steps:
@@ -137,7 +137,7 @@ jobs:
   build-binary-linux-musl:
     name: "linux musl"
     timeout-minutes: 10
-    runs-on: github-ubuntu-24.04-x86_64-8
+    runs-on: ubuntu-latest
     env:
       RUSTC_BOOTSTRAP: 1
       # Use `rustc`'s bundled `lld` instead of the system linker.
@@ -178,7 +178,7 @@ jobs:
   build-binary-macos-aarch64:
     name: "macos aarch64"
     timeout-minutes: 10
-    runs-on: namespace-profile-macos-15
+    runs-on: macos-15
     env:
       RUSTC_BOOTSTRAP: 1
     steps:
@@ -210,7 +210,7 @@ jobs:
   build-binary-macos-x86_64:
     name: "macos x86_64"
     timeout-minutes: 10
-    runs-on: namespace-profile-macos-15
+    runs-on: macos-15
     env:
       RUSTC_BOOTSTRAP: 1
     steps:
@@ -334,7 +334,7 @@ jobs:
 
   build-binary-msrv:
     name: "msrv"
-    runs-on: github-ubuntu-24.04-x86_64-8
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -360,7 +360,7 @@ jobs:
   build-binary-android-aarch64:
     name: "android aarch64"
     timeout-minutes: 10
-    runs-on: github-ubuntu-24.04-x86_64-8
+    runs-on: ubuntu-latest
     env:
       RUSTC_BOOTSTRAP: 1
     steps:
@@ -417,7 +417,7 @@ jobs:
   build-binary-freebsd:
     name: "freebsd"
     timeout-minutes: 10
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-4' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
