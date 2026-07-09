@@ -21,7 +21,8 @@ url = "https://<DOMAIN>-<ACCOUNT_ID>.d.codeartifact.<REGION>.amazonaws.com/pypi/
 ## Authenticate with AWS credentials
 
 uv automatically searches for credentials when accessing AWS CodeArtifact indexes over HTTPS. It
-calls [`GetAuthorizationToken`](https://docs.aws.amazon.com/codeartifact/latest/APIReference/API_GetAuthorizationToken.html)
+calls
+[`GetAuthorizationToken`](https://docs.aws.amazon.com/codeartifact/latest/APIReference/API_GetAuthorizationToken.html)
 using the default AWS credential chain, including environment variables, shared configuration files,
 instance profiles, and IRSA.
 
