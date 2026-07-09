@@ -20,6 +20,8 @@ use uv_netrc::Netrc;
 use uv_redacted::SafeUrl;
 use uv_static::EnvVars;
 
+use crate::providers::CodeArtifactEndpointProvider;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Credentials {
     /// RFC 7617 HTTP Basic Authentication
@@ -397,6 +399,9 @@ pub(crate) enum Authentication {
 
     /// Azure Storage signing.
     AzureSigner(AzureDefaultSigner),
+
+    /// AWS `CodeArtifact` authentication.
+    CodeArtifact(CodeArtifactEndpointProvider),
 }
 
 #[derive(Debug, Error)]
@@ -420,6 +425,9 @@ pub(crate) enum AuthenticationError {
         #[source]
         source: reqsign::Error,
     },
+
+    #[error("Failed to retrieve AWS CodeArtifact credentials")]
+    CodeArtifact,
 }
 
 impl PartialEq for Authentication {
@@ -429,6 +437,7 @@ impl PartialEq for Authentication {
             (Self::AwsSigner(..), Self::AwsSigner(..)) => true,
             (Self::GcsSigner(..), Self::GcsSigner(..)) => true,
             (Self::AzureSigner(..), Self::AzureSigner(..)) => true,
+            (Self::CodeArtifact(..), Self::CodeArtifact(..)) => true,
             _ => false,
         }
     }
@@ -460,12 +469,21 @@ impl From<AzureDefaultSigner> for Authentication {
     }
 }
 
+impl From<CodeArtifactEndpointProvider> for Authentication {
+    fn from(provider: CodeArtifactEndpointProvider) -> Self {
+        Self::CodeArtifact(provider)
+    }
+}
+
 impl Authentication {
     /// Return the password used for authentication, if any.
     pub(crate) fn password(&self) -> Option<&str> {
         match self {
             Self::Credentials(credentials) => credentials.password(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => None,
+            Self::AwsSigner(..)
+            | Self::GcsSigner(..)
+            | Self::AzureSigner(..)
+            | Self::CodeArtifact(..) => None,
         }
     }
 
@@ -473,7 +491,10 @@ impl Authentication {
     pub(crate) fn username(&self) -> Option<&str> {
         match self {
             Self::Credentials(credentials) => credentials.username(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => None,
+            Self::AwsSigner(..)
+            | Self::GcsSigner(..)
+            | Self::AzureSigner(..)
+            | Self::CodeArtifact(..) => None,
         }
     }
 
@@ -481,9 +502,10 @@ impl Authentication {
     pub(crate) fn as_username(&self) -> Cow<'_, Username> {
         match self {
             Self::Credentials(credentials) => credentials.as_username(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => {
-                Cow::Owned(Username::none())
-            }
+            Self::AwsSigner(..)
+            | Self::GcsSigner(..)
+            | Self::AzureSigner(..)
+            | Self::CodeArtifact(..) => Cow::Owned(Username::none()),
         }
     }
 
@@ -491,7 +513,10 @@ impl Authentication {
     pub(crate) fn to_username(&self) -> Username {
         match self {
             Self::Credentials(credentials) => credentials.to_username(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => Username::none(),
+            Self::AwsSigner(..)
+            | Self::GcsSigner(..)
+            | Self::AzureSigner(..)
+            | Self::CodeArtifact(..) => Username::none(),
         }
     }
 
@@ -499,7 +524,10 @@ impl Authentication {
     pub(crate) fn is_authenticated(&self) -> bool {
         match self {
             Self::Credentials(credentials) => credentials.is_authenticated(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => true,
+            Self::AwsSigner(..)
+            | Self::GcsSigner(..)
+            | Self::AzureSigner(..)
+            | Self::CodeArtifact(..) => true,
         }
     }
 
@@ -507,7 +535,10 @@ impl Authentication {
     pub(crate) fn is_empty(&self) -> bool {
         match self {
             Self::Credentials(credentials) => credentials.is_empty(),
-            Self::AwsSigner(..) | Self::GcsSigner(..) | Self::AzureSigner(..) => false,
+            Self::AwsSigner(..)
+            | Self::GcsSigner(..)
+            | Self::AzureSigner(..)
+            | Self::CodeArtifact(..) => false,
         }
     }
 
@@ -615,6 +646,15 @@ impl Authentication {
                     request.url_mut().set_query(path_and_query.query());
                 }
                 Ok(request)
+            }
+            Self::CodeArtifact(provider) => {
+                let Some(credentials) = provider
+                    .credentials_for(SafeUrl::ref_cast(request.url()))
+                    .await
+                else {
+                    return Err(AuthenticationError::CodeArtifact);
+                };
+                Ok(credentials.authenticate(request)?)
             }
         }
     }

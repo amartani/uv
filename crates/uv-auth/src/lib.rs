@@ -5,6 +5,7 @@ pub use keyring::KeyringProvider;
 pub use middleware::AuthMiddleware;
 pub use prompt::{CredentialsPrompt, CredentialsPromptError};
 pub use providers::AzureEndpointProvider;
+pub use providers::CodeArtifactEndpointProvider;
 pub use realm::{Realm, RealmRef};
 pub use service::Service;
 pub use store::{AuthBackend, TextCredentialStore, TomlCredentialError};

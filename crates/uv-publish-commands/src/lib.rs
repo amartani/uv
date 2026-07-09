@@ -9,7 +9,9 @@ use anyhow::{Context, Result, bail};
 use console::Term;
 use owo_colors::OwoColorize;
 use tracing::{debug, info, trace};
-use uv_auth::{Credentials, CredentialsPrompt, CredentialsPromptError};
+use uv_auth::{
+    CodeArtifactEndpointProvider, Credentials, CredentialsPrompt, CredentialsPromptError,
+};
 use uv_cache::Cache;
 use uv_client::{
     AuthIntegration, BaseClient, BaseClientBuilder, RedirectPolicy, RegistryClientBuilder,
@@ -302,6 +304,19 @@ async fn publish_file(
     Ok(())
 }
 
+fn trusted_publishing_for_registry(
+    publish_url: &SafeUrl,
+    trusted_publishing: TrustedPublishing,
+) -> TrustedPublishing {
+    if CodeArtifactEndpointProvider::is_codeartifact(publish_url)
+        && matches!(trusted_publishing, TrustedPublishing::Automatic)
+    {
+        TrustedPublishing::Never
+    } else {
+        trusted_publishing
+    }
+}
+
 /// The publish URL and credentials, with any ignored trusted publishing error.
 struct GatheredCredentials {
     publish_url: SafeUrl,
@@ -372,7 +387,7 @@ impl GatheredCredentials {
             username.as_deref(),
             password.as_deref(),
             keyring_provider,
-            trusted_publishing,
+            trusted_publishing_for_registry(&publish_url, trusted_publishing),
             &publish_url,
             oidc_client,
         )
@@ -559,6 +574,28 @@ mod tests {
         assert_snapshot!(
             err.to_string(),
             @"The password can't be set both in the publish URL and in the CLI"
+        );
+    }
+
+    #[test]
+    fn codeartifact_skips_automatic_trusted_publishing() {
+        let codeartifact = SafeUrl::parse(
+            "https://my-domain-123456789012.d.codeartifact.us-west-2.amazonaws.com/pypi/repo/",
+        )
+        .unwrap();
+        let other_registry = SafeUrl::parse("https://example.com").unwrap();
+
+        assert_eq!(
+            trusted_publishing_for_registry(&codeartifact, TrustedPublishing::Automatic),
+            TrustedPublishing::Never
+        );
+        assert_eq!(
+            trusted_publishing_for_registry(&codeartifact, TrustedPublishing::Always),
+            TrustedPublishing::Always
+        );
+        assert_eq!(
+            trusted_publishing_for_registry(&other_registry, TrustedPublishing::Automatic),
+            TrustedPublishing::Automatic
         );
     }
 }
