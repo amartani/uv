@@ -228,8 +228,6 @@ jobs:
           # Use Rust's bundled Mach-O LLD, which supports ICF.
           # ICF reduces the macOS aarch64 uv binary size by ~1.4%.
           RUSTFLAGS: "-C linker=rust-lld -C linker-flavor=ld64.lld -C link-arg=--icf=safe"
-          CFLAGS: "-fno-profile-generate -fno-profile-use"
-          CXXFLAGS: "-fno-profile-generate -fno-profile-use"
       - name: "Test wheel - aarch64"
         run: |
           pip install ${PACKAGE_NAME} --no-index --find-links dist/ --force-reinstall
@@ -594,13 +592,11 @@ jobs:
     strategy:
       matrix:
         platform:
-          # PGO requires a native runner; the 32-bit ARM targets are cross-compiled.
+          # Use a native ARM runner for aarch64 builds and smoke tests.
           - target: aarch64-unknown-linux-gnu
             arch: aarch64
             test_image: arm64v8/ubuntu:20.04@sha256:0908a765aeb02fe4e564b543eaed1d77839b7a08de94041e24328b2cb62ac553
             test_platform: linux/arm64
-            # The instrumented PGO build can exceed 32 GB of RAM and be reaped
-            # so we use a 64 GB runner for headroom
             runner: ubuntu-24.04-arm
             pgo: true
             # see https://github.com/astral-sh/ruff/issues/3791
