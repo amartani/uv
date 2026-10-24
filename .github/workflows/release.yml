@@ -27,6 +27,10 @@ on:
         required: true
         default: false
         type: boolean
+      build-run-id:
+        description: Reuse completed fork build artifacts from a release run (optional)
+        required: false
+        type: string
 
 env:
   # Release actions must not consume shared GitHub Actions caches.
@@ -96,6 +100,7 @@ jobs:
           path: plan-dist-manifest.json
 
   build-release-artifacts:
+    if: ${{ inputs.build-run-id == '' }}
     needs:
       - plan
     uses: $/.github/workflows/build-release-binaries.yml
@@ -110,16 +115,64 @@ jobs:
     needs:
       - plan
       - build-release-artifacts
+    if: ${{ always() && needs.plan.result == 'success' && (needs.build-release-artifacts.result == 'success' || (needs.build-release-artifacts.result == 'skipped' && inputs.build-run-id != '')) }}
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     outputs:
       github-archives: ${{ steps.archives.outputs.artifact-id }}
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        if: ${{ inputs.build-run-id != '' }}
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Verify reused build source and completed tests
+        if: ${{ inputs.build-run-id != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUILD_RUN_ID: ${{ inputs.build-run-id }}
+          RELEASE_TAG: ${{ needs.plan.outputs.tag }}
+        run: |
+          [[ "$BUILD_RUN_ID" =~ ^[0-9]+$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID" > build-run.json
+          jq -e --arg repository "$GITHUB_REPOSITORY" \
+            '.head_repository.full_name == $repository and .path == ".github/workflows/release.yml" and .status == "completed"' build-run.json
+          source_commit="$(jq -r '.head_sha' build-run.json)"
+          if [[ -n "$RELEASE_TAG" ]]; then
+            [[ "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" == "$source_commit" ]]
+          fi
+          # Only workflow and wheel-check changes may differ from the compiled source.
+          git diff --exit-code "$source_commit" HEAD -- . \
+            ':!.github' ':!scripts/check_uv_wheel_contents.py' \
+            ':!scripts/test_check_uv_wheel_contents.py'
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN_ID/jobs" > build-jobs.json
+          jq -e '[.[].jobs[] | select(.name | startswith("build-release-artifacts / ")) |
+            select(.name != "build-release-artifacts / check wheel contents")] |
+            length > 0 and all(.[]; .conclusion == "success")' build-jobs.json
+      - name: Download reused wheels
+        if: ${{ inputs.build-run-id != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          pattern: build-wheels-*
+          path: wheels
+          merge-multiple: true
+          run-id: ${{ inputs.build-run-id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check reused wheel contents
+        if: ${{ inputs.build-run-id != '' }}
+        run: |
+          python3 -m unittest discover -s scripts -p test_check_uv_wheel_contents.py
+          python3 scripts/check_uv_wheel_contents.py wheels/*.whl
       - name: Download built archives
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           pattern: build-github-archives-*
           path: archives
           merge-multiple: true
+          run-id: ${{ inputs.build-run-id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload release archives
         id: archives
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -130,7 +183,6 @@ jobs:
   generate-local-dist-manifest:
     needs:
       - plan
-      - build-release-artifacts
       - assemble-release-artifacts
     runs-on: "ubuntu-latest"
     outputs:
@@ -176,7 +228,6 @@ jobs:
   build-global-dist-artifacts:
     needs:
       - plan
-      - build-release-artifacts
       - generate-local-dist-manifest
       - assemble-release-artifacts
     runs-on: "ubuntu-latest"
@@ -244,12 +295,11 @@ jobs:
   finalize-dist-manifest:
     needs:
       - plan
-      - build-release-artifacts
       - build-global-dist-artifacts
       - generate-local-dist-manifest
       - assemble-release-artifacts
-    # Only run if we're publishing and the required builds and signing succeeded (skipped builds are fine).
-    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && needs.assemble-release-artifacts.result == 'success' && needs.build-global-dist-artifacts.result == 'success' && needs.build-release-artifacts.result == 'success' }}
+    # Only publish after the artifacts and their manifests have been validated.
+    if: ${{ always() && needs.plan.result == 'success' && needs.plan.outputs.publishing == 'true' && needs.assemble-release-artifacts.result == 'success' && needs.build-global-dist-artifacts.result == 'success' && needs.generate-local-dist-manifest.result == 'success' }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     runs-on: "ubuntu-latest"
