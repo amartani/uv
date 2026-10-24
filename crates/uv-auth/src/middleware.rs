@@ -13,7 +13,8 @@ use uv_redacted::SafeUrl;
 use uv_static::EnvVars;
 
 use crate::providers::{
-    AzureEndpointProvider, GcsEndpointProvider, HuggingFaceProvider, S3EndpointProvider,
+    AzureEndpointProvider, CodeArtifactEndpointProvider, GcsEndpointProvider, HuggingFaceProvider,
+    S3EndpointProvider,
 };
 use crate::{
     CredentialsCache, CredentialsPrompt, KeyringProvider,
@@ -185,6 +186,8 @@ pub struct AuthMiddleware {
     only_authenticated: bool,
     /// Optional interactive fallback for requests that require authentication.
     credentials_prompt: Option<CredentialsPrompt>,
+    /// Provider for AWS `CodeArtifact` credentials.
+    codeartifact_provider: CodeArtifactEndpointProvider,
     /// Cached S3 credentials to avoid running the credential helper multiple times.
     s3_credential_state: Mutex<S3CredentialState>,
     /// Cached GCS credentials to avoid running the credential helper multiple times.
@@ -211,6 +214,7 @@ impl AuthMiddleware {
             indexes: Indexes::new(),
             only_authenticated: false,
             credentials_prompt: None,
+            codeartifact_provider: CodeArtifactEndpointProvider::default(),
             s3_credential_state: Mutex::new(S3CredentialState::Uninitialized),
             gcs_credential_state: Mutex::new(GcsCredentialState::Uninitialized),
             azure_credential_state: Mutex::new(AzureCredentialState::Uninitialized),
@@ -294,6 +298,14 @@ impl AuthMiddleware {
     #[must_use]
     pub fn with_credentials_prompt(mut self, prompt: Option<CredentialsPrompt>) -> Self {
         self.credentials_prompt = prompt;
+        self
+    }
+
+    /// Configure the [`CodeArtifactEndpointProvider`] to use.
+    #[must_use]
+    #[cfg(test)]
+    fn with_codeartifact_provider(mut self, provider: CodeArtifactEndpointProvider) -> Self {
+        self.codeartifact_provider = provider;
         self
     }
 
@@ -664,7 +676,7 @@ impl AuthMiddleware {
 
     /// Fetch credentials for a URL.
     ///
-    /// Supports netrc file and keyring lookups.
+    /// Supports built-in providers, netrc files, credential stores, and keyring lookups.
     async fn fetch_credentials(
         &self,
         credentials: Option<&Authentication>,
@@ -678,6 +690,7 @@ impl AuthMiddleware {
             GcsEndpointProvider::is_gcs_endpoint(url, self.preview).map_err(Error::Middleware)?;
         let is_azure_endpoint = AzureEndpointProvider::is_azure_endpoint(url, self.preview)
             .map_err(Error::Middleware)?;
+        let requested_username = credentials.and_then(Authentication::username);
         let username = Username::from(
             credentials.map(|credentials| credentials.username().unwrap_or_default().to_string()),
         );
@@ -692,14 +705,16 @@ impl AuthMiddleware {
         if let Some(credentials) = self.cache().fetches.register_or_wait(&key).await {
             if credentials.is_some() {
                 trace!("Using credentials from previous fetch for {}", key.0);
-            } else {
-                trace!(
-                    "Skipping fetch of credentials for {}, previous attempt failed",
-                    key.0
-                );
+                return Ok(credentials);
             }
+            trace!(
+                "Skipping fetch of credentials for {}, previous attempt failed",
+                key.0
+            );
 
-            return Ok(credentials);
+            return Ok(self
+                .fetch_codeartifact_credentials(url, requested_username)
+                .await);
         }
 
         // Support for known providers, like Hugging Face and S3.
@@ -891,10 +906,40 @@ impl AuthMiddleware {
 
         let credentials = credentials.map(Authentication::from).map(Arc::new);
 
-        // Register the fetch for this key
+        // Register the fetch for this key. AWS `CodeArtifact` credentials are checked separately
+        // because the provider has its own expiry-aware cache for both hits and misses.
         self.cache().fetches.done(key, credentials.clone());
 
-        Ok(credentials)
+        if credentials.is_some() {
+            return Ok(credentials);
+        }
+
+        Ok(self
+            .fetch_codeartifact_credentials(url, requested_username)
+            .await)
+    }
+
+    async fn fetch_codeartifact_credentials(
+        &self,
+        url: &SafeUrl,
+        requested_username: Option<&str>,
+    ) -> Option<Arc<Authentication>> {
+        if self.keyring.is_none()
+            && CodeArtifactEndpointProvider::is_codeartifact(url)
+            && CodeArtifactEndpointProvider::supports_username(requested_username)
+            && self
+                .codeartifact_provider
+                .credentials_for(url)
+                .await
+                .is_some()
+        {
+            debug!("Found AWS CodeArtifact credentials for {url}");
+            Some(Arc::new(Authentication::from(
+                self.codeartifact_provider.clone(),
+            )))
+        } else {
+            None
+        }
     }
 }
 
@@ -914,10 +959,13 @@ fn tracing_url(request: &Request, credentials: Option<&Authentication>) -> SafeU
 #[cfg(test)]
 mod tests {
     use std::assert_matches;
+    use std::future::{Future, ready};
     use std::io::{self, Write};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use bytes::Bytes;
     use http::Method;
+    use reqsign::{Context, HttpSend};
     use reqwest::Client;
     use tempfile::NamedTempFile;
     use test_log::test;
@@ -956,6 +1004,148 @@ mod tests {
                 .build()
                 .expect("Reqwest client should build"),
         )
+    }
+
+    fn test_codeartifact_provider(token: &str) -> CodeArtifactEndpointProvider {
+        #[derive(Clone, Debug)]
+        struct TestHttpSend {
+            body: Bytes,
+            calls: std::sync::Arc<AtomicUsize>,
+        }
+
+        impl HttpSend for TestHttpSend {
+            fn http_send(
+                &self,
+                _req: http::Request<Bytes>,
+            ) -> impl Future<Output = reqsign::Result<http::Response<Bytes>>> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                ready(Ok(http::Response::builder()
+                    .status(200)
+                    .body(self.body.clone())
+                    .expect("test response should build")))
+            }
+        }
+
+        let body = format!(r#"{{"authorizationToken":"{token}"}}"#);
+        CodeArtifactEndpointProvider::with_signer(
+            reqsign::aws::default_signer("codeartifact", "us-west-2").with_credential_provider(
+                reqsign::aws::StaticCredentialProvider::new(
+                    "AKIAIOSFODNN7EXAMPLE",
+                    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                ),
+            ),
+        )
+        .with_context(Context::new().with_http_send(TestHttpSend {
+            body: Bytes::from(body),
+            calls: std::sync::Arc::new(AtomicUsize::new(0)),
+        }))
+    }
+
+    #[test(tokio::test)]
+    async fn test_codeartifact_credentials() -> Result<(), Error> {
+        let password = "test-token";
+        let url = SafeUrl::parse(
+            "https://my-domain-123456789012.d.codeartifact.us-west-2.amazonaws.com/pypi/repo/simple/",
+        )?;
+        let middleware = AuthMiddleware::new()
+            .with_cache(CredentialsCache::new())
+            .with_codeartifact_provider(test_codeartifact_provider(password));
+
+        let authentication = middleware
+            .fetch_credentials(None, &url, None, AuthPolicy::Auto)
+            .await?
+            .expect("Credentials should be pulled from the AWS CodeArtifact provider");
+        let request = authentication
+            .authenticate(Request::new(Method::GET, url.into_unsafe_url()))
+            .await?;
+        assert_eq!(
+            Credentials::from_request(&request)?,
+            Some(Credentials::basic(
+                Some("aws".to_string()),
+                Some(password.to_string())
+            ))
+        );
+
+        Ok(())
+    }
+
+    #[test(tokio::test)]
+    async fn test_codeartifact_credentials_skip_built_in_provider_with_keyring() -> Result<(), Error>
+    {
+        let url = SafeUrl::parse(
+            "https://my-domain-123456789012.d.codeartifact.us-west-2.amazonaws.com/pypi/repo/simple/",
+        )?;
+        let middleware = AuthMiddleware::new()
+            .with_cache(CredentialsCache::new())
+            .with_keyring(Some(KeyringProvider::empty()))
+            .with_codeartifact_provider(test_codeartifact_provider("test-token"));
+
+        assert!(
+            middleware
+                .fetch_credentials(None, &url, None, AuthPolicy::Auto)
+                .await?
+                .is_none(),
+            "Built-in credentials should not override an explicitly configured keyring provider"
+        );
+
+        Ok(())
+    }
+
+    #[test(tokio::test)]
+    async fn test_codeartifact_credentials_preserve_explicit_username() -> Result<(), Error> {
+        let url = SafeUrl::parse(
+            "https://my-domain-123456789012.d.codeartifact.us-west-2.amazonaws.com/pypi/repo/simple/",
+        )?;
+        let middleware = AuthMiddleware::new()
+            .with_cache(CredentialsCache::new())
+            .with_codeartifact_provider(test_codeartifact_provider("test-token"));
+        let credentials = Authentication::from(Credentials::basic(Some("user".to_string()), None));
+
+        assert!(
+            middleware
+                .fetch_credentials(Some(&credentials), &url, None, AuthPolicy::Auto)
+                .await?
+                .is_none()
+        );
+
+        Ok(())
+    }
+
+    #[test(tokio::test)]
+    async fn test_codeartifact_credentials_retry_missing_credentials() -> Result<(), Error> {
+        let url = SafeUrl::parse(
+            "https://my-domain-123456789012.d.codeartifact.us-west-2.amazonaws.com/pypi/repo/simple/",
+        )?;
+        let provider = test_codeartifact_provider("test-token");
+        provider.cache_missing_credentials(&url).await;
+        let middleware = AuthMiddleware::new()
+            .with_cache(CredentialsCache::new())
+            .with_codeartifact_provider(provider.clone());
+
+        assert!(
+            middleware
+                .fetch_credentials(None, &url, None, AuthPolicy::Auto)
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            middleware
+                .cache()
+                .fetches
+                .get(&(FetchUrl::Realm(Realm::from(&url)), Username::none())),
+            Some(None)
+        );
+
+        provider.clear_cached_credentials().await;
+
+        assert!(
+            middleware
+                .fetch_credentials(None, &url, None, AuthPolicy::Auto)
+                .await?
+                .is_some()
+        );
+
+        Ok(())
     }
 
     #[test(tokio::test)]
