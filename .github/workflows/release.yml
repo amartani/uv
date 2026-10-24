@@ -98,7 +98,7 @@ jobs:
   build-release-artifacts:
     needs:
       - plan
-    uses: ./.github/workflows/build-release-binaries.yml
+    uses: $/.github/workflows/build-release-binaries.yml
     with:
       plan: ${{ needs.plan.outputs.val }}
     secrets: inherit
