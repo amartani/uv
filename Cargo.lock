@@ -5648,7 +5648,7 @@ dependencies = [
 
 [[package]]
 name = "uv"
-version = "0.13.5"
+version = "0.13.5+codeartifact.1"
 dependencies = [
  "anstream",
  "anyhow",
@@ -5950,7 +5950,7 @@ dependencies = [
 
 [[package]]
 name = "uv-build"
-version = "0.13.5"
+version = "0.13.5+codeartifact.1"
 dependencies = [
  "anstream",
  "anyhow",
@@ -8188,7 +8188,7 @@ dependencies = [
 
 [[package]]
 name = "uv-version"
-version = "0.13.5"
+version = "0.13.5+codeartifact.1"
 
 [[package]]
 name = "uv-virtualenv"
