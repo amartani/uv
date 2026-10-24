@@ -38,7 +38,7 @@ permissions:
 jobs:
   sdist:
     name: sdist
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -119,9 +119,10 @@ jobs:
           name: build-sdist-uv_build
           path: crates/uv-build/dist
 
+    timeout-minutes: 120
   macos-x86_64:
     name: x86_64-apple-darwin
-    runs-on: namespace-profile-macos-15
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -194,9 +195,10 @@ jobs:
           name: build-wheels-uv_build-x86_64-apple-darwin
           path: crates/uv-build/dist
 
+    timeout-minutes: 120
   macos-aarch64:
     name: aarch64-apple-darwin
-    runs-on: namespace-profile-macos-15
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -297,9 +299,10 @@ jobs:
           name: build-wheels-uv_build-aarch64-apple-darwin
           path: crates/uv-build/dist
 
+    timeout-minutes: 120
   windows:
     name: ${{ matrix.platform.target }}
-    runs-on: namespace-profile-windows-2022-x86-64-16x32
+    runs-on: windows-latest
     strategy:
       matrix:
         platform:
@@ -445,10 +448,11 @@ jobs:
           name: build-wheels-uv_build-${{ matrix.platform.target }}
           path: crates/uv-build/dist
 
+    timeout-minutes: 120
   test-windows-aarch64:
     name: "test aarch64-pc-windows-msvc wheels"
     needs: windows
-    runs-on: github-windows-11-aarch64-8
+    runs-on: windows-11-arm
     steps:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -475,9 +479,10 @@ jobs:
           ${MODULE_NAME}-build --help
           python -m ${MODULE_NAME}_build --help
 
+    timeout-minutes: 120
   linux:
     name: ${{ matrix.target }}
-    runs-on: depot-ubuntu-latest-4
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
@@ -627,10 +632,11 @@ jobs:
           name: build-wheels-uv_build-${{ matrix.target }}
           path: crates/uv-build/dist
 
+    timeout-minutes: 120
   linux-arm:
     name: ${{ matrix.platform.target }}
     runs-on: ${{ matrix.platform.runner }}
-    timeout-minutes: ${{ matrix.platform.pgo && 60 || 30 }}
+    timeout-minutes: 120
     strategy:
       matrix:
         platform:
@@ -641,7 +647,7 @@ jobs:
             test_platform: linux/arm64
             # The instrumented PGO build can exceed 32 GB of RAM and be reaped
             # so we use a 64 GB runner for headroom
-            runner: depot-ubuntu-24.04-arm-16
+            runner: ubuntu-24.04-arm
             pgo: true
             # see https://github.com/astral-sh/ruff/issues/3791
             # and https://github.com/gnzlbg/jemallocator/issues/170#issuecomment-1503228963
@@ -652,14 +658,14 @@ jobs:
             arch: armv7
             test_image: arm32v7/ubuntu:20.04@sha256:d9a6ab6baaf86907ea1d46f0cbc87547920077c9c6017721faed6eeb51e9aa7e
             test_platform: linux/arm/v7
-            runner: depot-ubuntu-24.04-8
+            runner: ubuntu-latest
             pgo: false
             manylinux: 2_17
           - target: arm-unknown-linux-musleabihf
             arch: arm
             test_image: balenalib/rpi-raspbian:bullseye@sha256:851cfc48b26f6413a72a7f6873a7624ba2a427048976f6ab4483f72fe165d4f1
             test_platform: linux/arm/v6
-            runner: depot-ubuntu-24.04-8
+            runner: ubuntu-latest
             pgo: false
             # Special case: armv6l is linux_armv6l, no manylinux or musllinux.
             # "auto" instead of "off" to get the cross container
@@ -784,8 +790,8 @@ jobs:
   # Like `linux-arm`.
   linux-s390x:
     name: ${{ matrix.platform.target }}
-    timeout-minutes: 30
-    runs-on: depot-ubuntu-latest-4
+    timeout-minutes: 120
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         platform:
@@ -812,9 +818,8 @@ jobs:
           maturin-version: v1.15.0
           target: ${{ matrix.platform.target }}
           manylinux: 2_17
-          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
+          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM
           args: --release --locked --out dist --features self-update --compatibility pypi
-          rust-toolchain: ${{ matrix.platform.toolchain || null }}
           before-script-linux: |
             scripts/install-cargo-extensions.sh
             # Install the s390x cross target on x86_64
@@ -872,7 +877,7 @@ jobs:
           maturin-version: v1.15.0
           target: ${{ matrix.platform.target }}
           manylinux: 2_17
-          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
+          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM
           args: --profile minimal-size --locked --out crates/uv-build/dist -m crates/uv-build/Cargo.toml --compatibility pypi
           before-script-linux: |
             scripts/install-cargo-extensions.sh
@@ -901,7 +906,7 @@ jobs:
   # Like `linux-arm`, but install the `gcc-powerpc64-linux-gnu` package.
   linux-powerpc:
     name: ${{ matrix.platform.target }}
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         platform:
@@ -1014,11 +1019,12 @@ jobs:
           name: build-wheels-uv_build-${{ matrix.platform.target }}
           path: crates/uv-build/dist
 
-  # Like `linux-arm`.
+    # Like `linux-arm`.
+    timeout-minutes: 120
   linux-riscv64:
     name: ${{ matrix.platform.target }}
-    timeout-minutes: 30
-    runs-on: depot-ubuntu-latest-4
+    timeout-minutes: 120
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         platform:
@@ -1045,7 +1051,7 @@ jobs:
           maturin-version: v1.15.0
           target: ${{ matrix.platform.target }}
           manylinux: 2_31
-          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
+          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM
           args: --release --locked --out dist --features self-update --compatibility pypi
           before-script-linux: |
             scripts/install-cargo-extensions.sh
@@ -1100,7 +1106,7 @@ jobs:
           maturin-version: v1.15.0
           target: ${{ matrix.platform.target }}
           manylinux: 2_31
-          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
+          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM
           args: --profile minimal-size --locked --out crates/uv-build/dist -m crates/uv-build/Cargo.toml --compatibility pypi
           before-script-linux: |
             scripts/install-cargo-extensions.sh
@@ -1128,7 +1134,7 @@ jobs:
 
   musllinux:
     name: ${{ matrix.target }}
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         target:
@@ -1236,9 +1242,10 @@ jobs:
           name: build-wheels-uv_build-${{ matrix.target }}
           path: crates/uv-build/dist
 
+    timeout-minutes: 120
   musllinux-cross:
     name: ${{ matrix.platform.target }}
-    runs-on: depot-ubuntu-24.04-8
+    runs-on: ubuntu-latest
     env:
       CARGO_TARGET_RISCV64GC_UNKNOWN_LINUX_MUSL_RUSTFLAGS: "-C target-feature=+crt-static"
     strategy:
@@ -1282,7 +1289,6 @@ jobs:
           # Tag the musl builds as manylinux 2_17 fallback cause the aarch64 build only support 2_28
           args: --release --locked --out dist --features self-update --compatibility ${{ matrix.platform.arch == 'riscv64' && '2_31' || '2_17'}} --compatibility pypi
           docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
-          rust-toolchain: ${{ matrix.platform.toolchain || null }}
           before-script-linux: |
             scripts/install-cargo-extensions.sh
         env:
@@ -1354,7 +1360,6 @@ jobs:
           manylinux: musllinux_1_1
           args: --profile minimal-size --locked ${{ matrix.platform.arch == 'aarch64' && '--compatibility 2_17' || ''}} --out crates/uv-build/dist -m crates/uv-build/Cargo.toml --compatibility pypi
           docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
-          rust-toolchain: ${{ matrix.platform.toolchain || null }}
           before-script-linux: |
             scripts/install-cargo-extensions.sh
         env:
@@ -1393,9 +1398,10 @@ jobs:
           name: build-wheels-uv_build-${{ matrix.platform.target }}
           path: crates/uv-build/dist
 
+    timeout-minutes: 120
   check-wheels:
     name: "check wheel contents"
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-2' || 'ubuntu-slim' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     env:
       UV_PYTHON_DOWNLOADS_JSON_URL: ${{ github.workspace }}/crates/uv-python-managed/download-metadata.json
     needs:
@@ -1428,3 +1434,4 @@ jobs:
           merge-multiple: true
       - name: "check wheel contents"
         run: uv run scripts/check_uv_wheel_contents.py wheels/*
+    timeout-minutes: 120

@@ -31,7 +31,7 @@ env:
 jobs:
   rebase:
     name: "Rebase pull request #${{ inputs.number }}"
-    runs-on: depot-ubuntu-24.04-4
+    runs-on: ubuntu-latest
     environment:
       name: automations
       deployment: false
@@ -162,7 +162,7 @@ jobs:
   push:
     name: "Push rebased pull request #${{ inputs.number }}"
     needs: rebase
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-2' || 'ubuntu-slim' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     environment:
       name: automations
       deployment: false

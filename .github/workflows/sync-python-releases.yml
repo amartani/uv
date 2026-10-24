@@ -14,8 +14,7 @@ env:
 
 jobs:
   sync:
-    if: github.repository == 'astral-sh/uv'
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-4' || 'ubuntu-latest' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     environment:
       name: automations
       deployment: false

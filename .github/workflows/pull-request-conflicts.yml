@@ -36,7 +36,7 @@ jobs:
   identify:
     name: Identify conflicted pull requests
     if: github.repository == 'astral-sh/uv-dev' || github.repository == 'astral-sh/uv'
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-2' || 'ubuntu-slim' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
       contents: read
@@ -150,7 +150,7 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix: ${{ fromJSON(needs.identify.outputs.matrix) }}
-    uses: $/.github/workflows/rebase-conflicted-pull-request.yml
+    uses: ./.github/workflows/rebase-conflicted-pull-request.yml
     secrets: inherit
     with:
       number: ${{ matrix.number }}
@@ -164,7 +164,7 @@ jobs:
     name: "Remove rebase label from pull request #${{ inputs.pull_request }}"
     needs: rebase-and-push
     if: inputs.pull_request != ''
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-2' || 'ubuntu-slim' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     timeout-minutes: 5
     permissions:
       pull-requests: write

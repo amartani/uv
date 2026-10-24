@@ -36,7 +36,7 @@ jobs:
   prepare:
     name: "Prepare promotion of pull request #${{ inputs.pull_request }}"
     if: github.repository == 'astral-sh/uv-dev' || github.repository == 'astral-sh/uv-security'
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-2' || 'ubuntu-slim' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     environment:
       name: automations
       deployment: false
@@ -383,7 +383,7 @@ jobs:
     if: needs.prepare.outputs.action == 'update-parent'
     permissions:
       contents: read
-    uses: $/.github/workflows/update-pull-request-parent.yml
+    uses: ./.github/workflows/update-pull-request-parent.yml
     with:
       number: ${{ inputs.pull_request }}
       base-ref: ${{ needs.prepare.outputs.base_ref }}
@@ -397,7 +397,7 @@ jobs:
     name: "Promote pull request #${{ inputs.pull_request }}"
     needs: [prepare, update-pull-request-parent]
     if: always() && needs.prepare.result == 'success' && (needs.prepare.outputs.action == 'promote' || needs.update-pull-request-parent.outputs.outcome == 'clean')
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-2' || 'ubuntu-slim' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     environment:
       name: automations
       deployment: false
@@ -767,7 +767,7 @@ jobs:
     name: "Recover rejected promotion #${{ inputs.pull_request }}"
     needs: [prepare, update-pull-request-parent, promote]
     if: always() && needs.prepare.outputs.approval_id != '' && (needs.prepare.outputs.rejection_reason != '' || needs.prepare.outputs.changed_head != '' || needs.promote.outputs.rejection_reason != '' || needs.promote.outputs.changed_head != '' || needs.update-pull-request-parent.outputs.rejection_reason != '' || needs.update-pull-request-parent.outputs.outcome == 'conflicts' || needs.update-pull-request-parent.outputs.outcome == 'empty')
-    runs-on: ${{ github.repository_owner == 'astral-sh' && 'github-ubuntu-24.04-x86_64-2' || 'ubuntu-slim' }}
+    runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     environment:
       name: automations
       deployment: false
