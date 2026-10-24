@@ -20,7 +20,7 @@ use uv_static::EnvVars;
 
 fn main() {
     if std::env::var_os(EnvVars::CARGO_CFG_WINDOWS).is_some() {
-        let [major, minor, patch] = uv_version::version()
+        let [major, minor, patch] = uv_version::version_without_suffix()
             .splitn(3, '.')
             .map(str::parse)
             .collect::<Result<Vec<u16>, _>>()
