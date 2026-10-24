@@ -16,7 +16,6 @@ env:
 
 jobs:
   prepare-release:
-    
     runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     environment:
       name: automations

@@ -14,7 +14,6 @@ env:
 
 jobs:
   sync:
-    
     runs-on: ${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}
     environment:
       name: automations

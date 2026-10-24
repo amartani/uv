@@ -209,8 +209,8 @@ jobs:
 
   build-binary-macos-x86_64:
     name: "macos x86_64"
-    timeout-minutes: 10
-    runs-on: macos-15
+    timeout-minutes: 30
+    runs-on: macos-15-intel
     env:
       RUSTC_BOOTSTRAP: 1
     steps:

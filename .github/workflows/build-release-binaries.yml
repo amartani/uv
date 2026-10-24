@@ -818,9 +818,8 @@ jobs:
           maturin-version: v1.15.0
           target: ${{ matrix.platform.target }}
           manylinux: 2_17
-          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
+          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM
           args: --release --locked --out dist --features self-update --compatibility pypi
-          rust-toolchain: ${{ matrix.platform.toolchain || null }}
           before-script-linux: |
             scripts/install-cargo-extensions.sh
             # Install the s390x cross target on x86_64
@@ -878,7 +877,7 @@ jobs:
           maturin-version: v1.15.0
           target: ${{ matrix.platform.target }}
           manylinux: 2_17
-          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
+          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM
           args: --profile minimal-size --locked --out crates/uv-build/dist -m crates/uv-build/Cargo.toml --compatibility pypi
           before-script-linux: |
             scripts/install-cargo-extensions.sh
@@ -1052,7 +1051,7 @@ jobs:
           maturin-version: v1.15.0
           target: ${{ matrix.platform.target }}
           manylinux: 2_31
-          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
+          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM
           args: --release --locked --out dist --features self-update --compatibility pypi
           before-script-linux: |
             scripts/install-cargo-extensions.sh
@@ -1107,7 +1106,7 @@ jobs:
           maturin-version: v1.15.0
           target: ${{ matrix.platform.target }}
           manylinux: 2_31
-          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
+          docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM
           args: --profile minimal-size --locked --out crates/uv-build/dist -m crates/uv-build/Cargo.toml --compatibility pypi
           before-script-linux: |
             scripts/install-cargo-extensions.sh
@@ -1290,7 +1289,6 @@ jobs:
           # Tag the musl builds as manylinux 2_17 fallback cause the aarch64 build only support 2_28
           args: --release --locked --out dist --features self-update --compatibility ${{ matrix.platform.arch == 'riscv64' && '2_31' || '2_17'}} --compatibility pypi
           docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
-          rust-toolchain: ${{ matrix.platform.toolchain || null }}
           before-script-linux: |
             scripts/install-cargo-extensions.sh
         env:
@@ -1362,7 +1360,6 @@ jobs:
           manylinux: musllinux_1_1
           args: --profile minimal-size --locked ${{ matrix.platform.arch == 'aarch64' && '--compatibility 2_17' || ''}} --out crates/uv-build/dist -m crates/uv-build/Cargo.toml --compatibility pypi
           docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM ${{ matrix.platform.maturin_docker_options }}
-          rust-toolchain: ${{ matrix.platform.toolchain || null }}
           before-script-linux: |
             scripts/install-cargo-extensions.sh
         env:
