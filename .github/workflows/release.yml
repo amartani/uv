@@ -184,6 +184,7 @@ jobs:
     needs:
       - plan
       - assemble-release-artifacts
+    if: ${{ always() && needs.plan.result == 'success' && needs.assemble-release-artifacts.result == 'success' }}
     runs-on: "ubuntu-latest"
     outputs:
       artifact: ${{ steps.upload.outputs.artifact-id }}
@@ -230,6 +231,7 @@ jobs:
       - plan
       - generate-local-dist-manifest
       - assemble-release-artifacts
+    if: ${{ always() && needs.plan.result == 'success' && needs.generate-local-dist-manifest.result == 'success' && needs.assemble-release-artifacts.result == 'success' }}
     runs-on: "ubuntu-latest"
     outputs:
       artifacts: ${{ steps.artifacts.outputs.artifact-id }}
@@ -345,7 +347,7 @@ jobs:
     needs:
       - plan
       - finalize-dist-manifest
-    if: ${{ needs.finalize-dist-manifest.result == 'success' }}
+    if: ${{ always() && needs.finalize-dist-manifest.result == 'success' }}
     runs-on: "${{ github.repository_owner == 'astral-sh' && 'ubuntu-latest' || 'ubuntu-latest' }}"
     permissions:
       "attestations": "write"
