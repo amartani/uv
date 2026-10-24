@@ -215,21 +215,6 @@ jobs:
         shell: bash
         run: scripts/install-cargo-extensions.sh
 
-      - name: "Install LLVM profiling tools"
-        run: rustup component add llvm-tools-preview
-      - name: "Train PGO uv"
-        run: |
-          python scripts/build_uv_pgo.py \
-            --target aarch64-apple-darwin \
-            --target-dir "${{ github.workspace }}/target/uv-pgo" \
-            --train-only
-        env:
-          CARGO: ${{ github.workspace }}/scripts/cargo.sh
-          # Match maturin's deployment target for the release build.
-          MACOSX_DEPLOYMENT_TARGET: "11.0"
-          RUSTFLAGS: "-C linker=rust-lld -C linker-flavor=ld64.lld -C link-arg=--icf=safe"
-
-      # uv
       - name: "Build wheels - aarch64"
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
@@ -242,9 +227,7 @@ jobs:
           CARGO: ${{ github.workspace }}/scripts/cargo.sh
           # Use Rust's bundled Mach-O LLD, which supports ICF.
           # ICF reduces the macOS aarch64 uv binary size by ~1.4%.
-          RUSTFLAGS: "-C linker=rust-lld -C linker-flavor=ld64.lld -C link-arg=--icf=safe -Cprofile-use=${{ github.workspace }}/target/uv-pgo/uv.profdata"
-          CFLAGS: "-fno-profile-generate -fno-profile-use"
-          CXXFLAGS: "-fno-profile-generate -fno-profile-use"
+          RUSTFLAGS: "-C linker=rust-lld -C linker-flavor=ld64.lld -C link-arg=--icf=safe"
       - name: "Test wheel - aarch64"
         run: |
           pip install ${PACKAGE_NAME} --no-index --find-links dist/ --force-reinstall
@@ -312,6 +295,7 @@ jobs:
             arch: x86
           - target: aarch64-pc-windows-msvc
             arch: x64
+      fail-fast: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -346,23 +330,6 @@ jobs:
             throw "NASM installation failed: $($installation.ExitCode)"
           }
           echo "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Append
-      - name: "Install LLVM profiling tools"
-        if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
-        run: rustup component add llvm-tools-preview
-      - name: "Train PGO uv"
-        if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
-        shell: bash
-        run: |
-          export RUSTFLAGS="${RUSTFLAGS:+${RUSTFLAGS} }-C target-feature=+crt-static"
-
-          python scripts/build_uv_pgo.py \
-            --target "${{ matrix.platform.target }}" \
-            --target-dir "${{ github.workspace }}/target/uv-pgo" \
-            --train-only
-        env:
-          CARGO: ${{ github.workspace }}/scripts/cargo.cmd
-          AWS_LC_SYS_PREBUILT_NASM: "0"
-      # uv
       - name: "Build wheels"
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
@@ -375,7 +342,6 @@ jobs:
           # Disable prebuilt NASM objects so we always compile assembly from source.
           AWS_LC_SYS_PREBUILT_NASM: "0"
           # Target-specific flags preserve the static CRT configured in .cargo/config.toml.
-          CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' && format('-Cprofile-use={0}/target/uv-pgo/uv.profdata', github.workspace) || '' }}
       - name: "Verify static Windows runtime"
         if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
         shell: bash
@@ -488,6 +454,7 @@ jobs:
         include:
           - { target: "i686-unknown-linux-gnu", cc: "gcc -m32" }
           - { target: "x86_64-unknown-linux-gnu", cc: "gcc" }
+      fail-fast: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -511,11 +478,11 @@ jobs:
           # Generally, we try to build in a target docker container. In this case however, a
           # 32-bit compiler runs out of memory (4GB memory limit for 32-bit), so we cross compile
           # from 64-bit version of the container, breaking the pattern from other builds.
-          container: quay.io/pypa/manylinux2014
+          container: quay.io/pypa/manylinux2014_x86_64
           manylinux: 2_17
           docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM
           args: --release --locked --out dist --features self-update --compatibility pypi
-          before-script-linux: |
+          before-script-linux: |+
             # Install the 32-bit cross target on 64-bit (noop if we're already on 64-bit)
             rustup target add ${{ matrix.target }}
             # If we're running on rhel centos, install needed packages.
@@ -547,15 +514,6 @@ jobs:
                 export RUSTFLAGS="${RUSTFLAGS:+${RUSTFLAGS} }--remap-path-prefix=$registry/=registry/"
             done
 
-            if [[ "${{ matrix.target }}" == "x86_64-unknown-linux-gnu" ]]; then
-                rustup component add llvm-tools-preview
-                python${{ env.PYTHON_VERSION }} scripts/build_uv_pgo.py \
-                    --target "${{ matrix.target }}" \
-                    --target-dir "$PWD/target/uv-pgo" \
-                    --train-only
-
-                export RUSTFLAGS="${RUSTFLAGS:+${RUSTFLAGS} }-Cprofile-use=$PWD/target/uv-pgo/uv.profdata"
-            fi
         env:
           CC: ${{ matrix.cc }}
           CARGO: ${{ github.workspace }}/scripts/cargo.sh
@@ -602,7 +560,7 @@ jobs:
           manylinux: 2_17
           docker-options: -e CARGO -e AWS_LC_SYS_USE_SYSTEM
           args: --profile minimal-size --locked --out crates/uv-build/dist -m crates/uv-build/Cargo.toml --compatibility pypi
-          before-script-linux: |
+          before-script-linux: |+
             scripts/install-cargo-extensions.sh
 
             # TODO: Use Cargo's profile-level `trim-paths` once it is stable.
@@ -612,12 +570,6 @@ jobs:
                 export RUSTFLAGS="${RUSTFLAGS:+${RUSTFLAGS} }--remap-path-prefix=$registry/=registry/"
             done
 
-            if [[ "${{ matrix.target }}" == "x86_64-unknown-linux-gnu" ]]; then
-                # Fold identical functions with Rust's bundled LLD.
-                bundled_lld_dir="$(rustc --print sysroot)/lib/rustlib/${{ matrix.target }}/bin/gcc-ld"
-                test -x "${bundled_lld_dir}/ld.lld"
-                export RUSTFLAGS="${RUSTFLAGS:+${RUSTFLAGS} }-C link-arg=-B${bundled_lld_dir} -C link-arg=-fuse-ld=lld -C link-arg=-Wl,--icf=all"
-            fi
         env:
           CARGO: ${{ github.workspace }}/scripts/cargo.sh
       - name: "Test wheel uv-build"
@@ -640,13 +592,11 @@ jobs:
     strategy:
       matrix:
         platform:
-          # PGO requires a native runner; the 32-bit ARM targets are cross-compiled.
+          # Use a native ARM runner for aarch64 builds and smoke tests.
           - target: aarch64-unknown-linux-gnu
             arch: aarch64
             test_image: arm64v8/ubuntu:20.04@sha256:0908a765aeb02fe4e564b543eaed1d77839b7a08de94041e24328b2cb62ac553
             test_platform: linux/arm64
-            # The instrumented PGO build can exceed 32 GB of RAM and be reaped
-            # so we use a 64 GB runner for headroom
             runner: ubuntu-24.04-arm
             pgo: true
             # see https://github.com/astral-sh/ruff/issues/3791
@@ -671,6 +621,7 @@ jobs:
             # "auto" instead of "off" to get the cross container
             manylinux: auto
 
+      fail-fast: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -702,13 +653,6 @@ jobs:
                 test -x "${bundled_lld_dir}/ld.lld"
                 export RUSTFLAGS="${RUSTFLAGS:+${RUSTFLAGS} }-C link-arg=-B${bundled_lld_dir} -C link-arg=-fuse-ld=lld"
 
-                rustup component add llvm-tools-preview
-                python${{ env.PYTHON_VERSION }} scripts/build_uv_pgo.py \
-                    --target "${{ matrix.platform.target }}" \
-                    --target-dir "$PWD/target/uv-pgo" \
-                    --train-only
-
-                export RUSTFLAGS="${RUSTFLAGS:+${RUSTFLAGS} }-Cprofile-use=$PWD/target/uv-pgo/uv.profdata"
             fi
         env:
           CARGO: ${{ github.workspace }}/scripts/cargo.sh
@@ -798,6 +742,7 @@ jobs:
           - target: s390x-unknown-linux-gnu
             arch: s390x
 
+      fail-fast: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -918,6 +863,7 @@ jobs:
             # https://github.com/aws/aws-lc/pull/3429
             maturin_docker_options: -e JEMALLOC_SYS_WITH_LG_PAGE=16 -e AWS_LC_SYS_CFLAGS_powerpc64le_unknown_linux_gnu=-DAT_HWCAP2=26
 
+      fail-fast: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1031,6 +977,7 @@ jobs:
           - target: riscv64gc-unknown-linux-gnu
             arch: riscv64
 
+      fail-fast: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1140,6 +1087,7 @@ jobs:
         target:
           - x86_64-unknown-linux-musl
           - i686-unknown-linux-musl
+      fail-fast: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
