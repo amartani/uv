@@ -58,9 +58,9 @@ def check_uv_wheel(uv_wheel: Path) -> None:
         files = wheel.namelist()
     # Escape the version and remove the Windows exe extension.
     actual = {
-        re.sub(r"^([a-z_0-9]*)-([0-9]+\.)*[0-9]+", r"\1-VERSION", file).replace(
-            ".exe", ""
-        )
+        re.sub(
+            r"^([a-z_0-9]+)-[^/]+(\.(?:data|dist-info)/)", r"\1-VERSION\2", file
+        ).replace(".exe", "")
         for file in files
     }
     if expected != actual:
