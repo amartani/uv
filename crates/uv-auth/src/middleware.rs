@@ -959,6 +959,7 @@ fn tracing_url(request: &Request, credentials: Option<&Authentication>) -> SafeU
 #[cfg(test)]
 mod tests {
     use std::assert_matches;
+    use std::future::{Future, ready};
     use std::io::{self, Write};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -1013,15 +1014,15 @@ mod tests {
         }
 
         impl HttpSend for TestHttpSend {
-            async fn http_send(
+            fn http_send(
                 &self,
                 _req: http::Request<Bytes>,
-            ) -> reqsign::Result<http::Response<Bytes>> {
+            ) -> impl Future<Output = reqsign::Result<http::Response<Bytes>>> {
                 self.calls.fetch_add(1, Ordering::SeqCst);
-                Ok(http::Response::builder()
+                ready(Ok(http::Response::builder()
                     .status(200)
                     .body(self.body.clone())
-                    .expect("test response should build"))
+                    .expect("test response should build")))
             }
         }
 
