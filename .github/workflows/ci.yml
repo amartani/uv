@@ -20,15 +20,15 @@ jobs:
   plan:
     # CI on main is redundant in the security repository.
     if: ${{ github.repository != 'astral-sh/uv-security' || github.ref != 'refs/heads/main' }}
-    uses: ./.github/workflows/plan.yml
+    uses: $/.github/workflows/plan.yml
 
   check-fmt:
     needs: plan
-    uses: ./.github/workflows/check-fmt.yml
+    uses: $/.github/workflows/check-fmt.yml
 
   check-lint:
     needs: plan
-    uses: ./.github/workflows/check-lint.yml
+    uses: $/.github/workflows/check-lint.yml
     with:
       code-changed: ${{ needs.plan.outputs.test-code }}
       save-rust-cache: ${{ needs.plan.outputs.save-rust-cache }}
@@ -36,13 +36,13 @@ jobs:
   check-docs:
     needs: plan
     if: ${{ needs.plan.outputs.run-checks == 'true' }}
-    uses: ./.github/workflows/check-docs.yml
+    uses: $/.github/workflows/check-docs.yml
     secrets: inherit
 
   check-zizmor:
     needs: plan
     if: ${{ needs.plan.outputs.run-checks == 'true' }}
-    uses: ./.github/workflows/check-zizmor.yml
+    uses: $/.github/workflows/check-zizmor.yml
     permissions:
       contents: read
       security-events: write
@@ -50,12 +50,12 @@ jobs:
   check-publish:
     needs: plan
     if: ${{ needs.plan.outputs.test-code == 'true' }}
-    uses: ./.github/workflows/check-publish.yml
+    uses: $/.github/workflows/check-publish.yml
 
   check-release:
     needs: plan
     if: ${{ needs.plan.outputs.run-checks == 'true' || needs.plan.outputs.require-check-release == 'true' }}
-    uses: ./.github/workflows/check-release.yml
+    uses: $/.github/workflows/check-release.yml
 
   check-cargo-lock-changes:
     name: "Cargo lockfile changes"
@@ -86,12 +86,12 @@ jobs:
   check-lock:
     needs: plan
     if: ${{ needs.plan.outputs.run-checks == 'true' }}
-    uses: ./.github/workflows/check-lock.yml
+    uses: $/.github/workflows/check-lock.yml
 
   check-generated-files:
     needs: plan
     if: ${{ needs.plan.outputs.test-code == 'true' }}
-    uses: ./.github/workflows/check-generated-files.yml
+    uses: $/.github/workflows/check-generated-files.yml
     with:
       schema-changed: ${{ needs.plan.outputs.check-schema }}
       save-rust-cache: ${{ needs.plan.outputs.save-rust-cache }}
@@ -99,7 +99,7 @@ jobs:
   test:
     needs: plan
     if: ${{ needs.plan.outputs.test-code == 'true' }}
-    uses: ./.github/workflows/test.yml
+    uses: $/.github/workflows/test.yml
     with:
       save-rust-cache: ${{ needs.plan.outputs.save-rust-cache }}
       test-macos: ${{ needs.plan.outputs.test-macos }}
@@ -107,14 +107,14 @@ jobs:
   test-windows-trampolines:
     needs: plan
     if: ${{ needs.plan.outputs.test-windows-trampoline == 'true' }}
-    uses: ./.github/workflows/test-windows-trampolines.yml
+    uses: $/.github/workflows/test-windows-trampolines.yml
     with:
       trampoline-build: ${{ needs.plan.outputs.test-windows-trampoline-check-binary }}
 
   build-dev-binaries:
     needs: plan
     if: ${{ needs.plan.outputs.test-code == 'true' }}
-    uses: ./.github/workflows/build-dev-binaries.yml
+    uses: $/.github/workflows/build-dev-binaries.yml
     with:
       save-rust-cache: ${{ needs.plan.outputs.save-rust-cache }}
 
@@ -123,7 +123,7 @@ jobs:
       - plan
       - build-dev-binaries
     if: ${{ needs.plan.outputs.test-smoke == 'true' }}
-    uses: ./.github/workflows/test-smoke.yml
+    uses: $/.github/workflows/test-smoke.yml
     with:
       sha: ${{ github.sha }}
 
@@ -132,7 +132,7 @@ jobs:
       - plan
       - build-dev-binaries
     if: ${{ needs.plan.outputs.test-integration == 'true' }}
-    uses: ./.github/workflows/test-integration.yml
+    uses: $/.github/workflows/test-integration.yml
     secrets: inherit
     permissions:
       contents: read
@@ -145,7 +145,7 @@ jobs:
       - plan
       - build-dev-binaries
     if: ${{ needs.plan.outputs.test-system == 'true' }}
-    uses: ./.github/workflows/test-system.yml
+    uses: $/.github/workflows/test-system.yml
     with:
       sha: ${{ github.sha }}
 
@@ -154,14 +154,14 @@ jobs:
       - plan
       - build-dev-binaries
     if: ${{ needs.plan.outputs.test-ecosystem == 'true' }}
-    uses: ./.github/workflows/test-ecosystem.yml
+    uses: $/.github/workflows/test-ecosystem.yml
     with:
       sha: ${{ github.sha }}
 
   build-release-artifacts:
     needs: plan
     if: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build:release') }}
-    uses: ./.github/workflows/build-release-binaries.yml
+    uses: $/.github/workflows/build-release-binaries.yml
     secrets: inherit
 
   required-checks-passed:

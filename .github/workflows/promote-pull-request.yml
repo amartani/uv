@@ -383,7 +383,7 @@ jobs:
     if: needs.prepare.outputs.action == 'update-parent'
     permissions:
       contents: read
-    uses: ./.github/workflows/update-pull-request-parent.yml
+    uses: $/.github/workflows/update-pull-request-parent.yml
     with:
       number: ${{ inputs.pull_request }}
       base-ref: ${{ needs.prepare.outputs.base_ref }}
