@@ -7,6 +7,7 @@ use bytes::Bytes;
 use reqsign::aws::DefaultSigner as AwsDefaultSigner;
 use reqsign::azure::DefaultSigner as AzureDefaultSigner;
 use reqsign::google::DefaultSigner as GcsDefaultSigner;
+use reqsign::hash::hex_sha256;
 use reqsign::{Context, default_context};
 use rustc_hash::FxHashMap;
 use serde::Deserialize;
@@ -186,6 +187,8 @@ impl CodeArtifactEndpointProvider {
             .method(http::Method::POST)
             .uri(request_url.as_str())
             .header(http::header::CONTENT_LENGTH, "0")
+            // CodeArtifact requires the empty-body digest for SigV4 authentication.
+            .header("x-amz-content-sha256", hex_sha256(b""))
             .body(())
             .inspect_err(|err| {
                 debug!("Failed to build AWS CodeArtifact authorization token request: {err}");
@@ -530,8 +533,10 @@ fn is_endpoint_url(url: &SafeUrl, endpoint_url: &SafeUrl) -> bool {
 #[cfg(test)]
 mod tests {
     use std::future::{Future, ready};
+    use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
+    use http::{Method, Request};
     use reqsign::HttpSend;
 
     use super::*;
@@ -541,6 +546,7 @@ mod tests {
         body: Bytes,
         status: http::StatusCode,
         calls: Arc<AtomicUsize>,
+        requests: Arc<Mutex<Vec<Request<Bytes>>>>,
     }
 
     impl TestHttpSend {
@@ -549,6 +555,7 @@ mod tests {
                 body: Bytes::copy_from_slice(body.as_ref()),
                 status: http::StatusCode::OK,
                 calls: Arc::new(AtomicUsize::new(0)),
+                requests: Arc::new(Mutex::new(Vec::new())),
             }
         }
     }
@@ -556,9 +563,13 @@ mod tests {
     impl HttpSend for TestHttpSend {
         fn http_send(
             &self,
-            _req: http::Request<Bytes>,
+            request: Request<Bytes>,
         ) -> impl Future<Output = reqsign::Result<http::Response<Bytes>>> {
             self.calls.fetch_add(1, Ordering::SeqCst);
+            self.requests
+                .lock()
+                .expect("test requests should lock")
+                .push(request);
             ready(Ok(http::Response::builder()
                 .status(self.status)
                 .body(self.body.clone())
@@ -582,7 +593,9 @@ mod tests {
     async fn test_codeartifact_credentials_from_api() {
         // Far-future Unix timestamp so the token is treated as unexpired.
         let body = r#"{"authorizationToken":"test-token","expiration":4102444800.0}"#;
-        let provider = test_codeartifact_provider(TestHttpSend::new(body));
+        let http = TestHttpSend::new(body);
+        let requests = http.requests.clone();
+        let provider = test_codeartifact_provider(http);
 
         assert_eq!(
             provider
@@ -598,6 +611,21 @@ mod tests {
                 Some("test-token".to_string())
             ))
         );
+
+        let requests = requests.lock().expect("test requests should lock");
+        assert_eq!(requests.len(), 1);
+        let request = requests.first().expect("token request should be sent");
+        assert_eq!(request.method(), Method::POST);
+        assert_eq!(
+            request.uri().to_string(),
+            "https://codeartifact.us-west-2.amazonaws.com/v1/authorization-token?domain=my-domain&domain-owner=123456789012&duration=3600"
+        );
+        assert_eq!(
+            request.headers()["x-amz-content-sha256"],
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(request.headers()["content-length"], "0");
+        assert!(request.body().is_empty());
     }
 
     #[tokio::test]
